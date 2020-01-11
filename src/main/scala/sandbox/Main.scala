@@ -1,14 +1,17 @@
 package sandbox
 
-import cats.kernel.Monoid
-import cats.instances.int._
-import cats.instances.option._
-import cats.syntax.semigroup._
+import cats.syntax.functor._
 
 object Main extends App {
-  def add[A](items: List[A])(implicit monoid: Monoid[A]): A =
-    items.foldLeft(monoid.empty)(_ |+| _)
+  val f1: Int => Double = (a: Int) => a * 0.5
+  val f2: Double => String = (a: Double) => s"$a ___ Int"
+  val btree = BTree.branch(
+    BTree.leaf(1),
+    BTree.branch(
+      BTree.branch( BTree.leaf(1), BTree.leaf(100)),
+      BTree.leaf(1000)
+    )
+  )
 
-  println(add(List(Some(100), Some(1), None, Some(50))))
-  println(add(List(Order(1, 2), Order(3, 4))))
+  println(btree.map(f1).map(f2))
 }
