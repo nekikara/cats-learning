@@ -52,7 +52,13 @@ object JsonSyntax {
 }
 
 trait Printable[A] {
+  self =>
   def format(value: A): String
+
+  def contramap[B](func: B => A): Printable[B] =
+    new Printable[B] {
+      override def format(value: B): String = self.format(func(value))
+    }
 }
 
 object PrintableInstances {
@@ -69,10 +75,16 @@ object PrintableInstances {
     new Printable[Cat] {
       override def format(value: Cat): String = s"${value.name.toUpperCase} is a ${value.age} year-old ${value.color} cat."
     }
+
+  implicit val boolPrintable: Printable[Boolean] =
+    new Printable[Boolean] {
+      override def format(value: Boolean): String = if (value) "yes" else "no"
+    }
 }
 
 object Printable {
   def format[A](value: A)(implicit p: Printable[A]): String = p.format(value)
+  def contramap[A, B](func: B => A)(implicit p: Printable[A]): Printable[B] = p.contramap(func)
   def print[A](value: A)(implicit p: Printable[A]): Unit = println(p.format(value))
 }
 
