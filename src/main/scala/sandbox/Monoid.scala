@@ -1,5 +1,6 @@
 package sandbox
 
+/*
 trait Semigroup[A] {
   def combine(x: A, y: A): A
 }
@@ -27,6 +28,13 @@ object Monoid {
     override def combine(x: Boolean, y: Boolean): Boolean = (!x || y) && (x || !y)
     override def empty: Boolean = true
   }
-}
 
-
+//  implicit def setUnionMonoid[A]: Monoid[Set[A]] = new Monoid[Set[A]] {
+//    override def combine(a: Set[A], b: Set[A]): Set[A] = a | b
+//    override def empty: Set[A] = Set.empty[A]
+//  }
+  implicit def symDiffMonoid[A]: Monoid[Set[A]] = new Monoid[Set[A]] {
+    override def combine(a: Set[A], b: Set[A]): Set[A] = (a &~ b) | (b &~ a)
+    override def empty: Set[A] = Set.empty[A]
+  }
+*/

@@ -1,17 +1,14 @@
 package sandbox
 
-import Monoid._
+import cats.kernel.Monoid
+import cats.instances.int._
+import cats.instances.option._
+import cats.syntax.semigroup._
 
 object Main extends App {
-  def associativeLaw[A](x: A, y: A, z: A)(implicit m: Monoid[A]): Boolean = {
-    m.combine(x, m.combine(y, z)) == m.combine(m.combine(x, y), z)
-  }
-  def identityLaw[A](x: A)(implicit m: Monoid[A]): Boolean = {
-    (m.combine(x, m.empty) == x) && (m.combine(m.empty, x) == x)
-  }
+  def add[A](items: List[A])(implicit monoid: Monoid[A]): A =
+    items.foldLeft(monoid.empty)(_ |+| _)
 
-  println(associativeLaw[Boolean](true, true, false))
-  println(associativeLaw[Boolean](false, true, false))
-  println(identityLaw[Boolean](true))
-  println(identityLaw[Boolean](false))
+  println(add(List(Some(100), Some(1), None, Some(50))))
+  println(add(List(Order(1, 2), Order(3, 4))))
 }
