@@ -25,4 +25,3 @@ object CCodec {
   def encode[A](value: A)(implicit c: CCodec[A]): String = c.encode(value)
   def decode[A](value: String)(implicit c: CCodec[A]): A = c.decode(value)
 }
-
