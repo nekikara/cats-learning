@@ -1,32 +1,61 @@
 package sandbox
 
-import cats.data.Writer
-import cats.instances.vector._
+import cats.data.Reader
 import cats.syntax.applicative._
-import cats.syntax.writer._
-
-import scala.concurrent._
-import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.duration._
 
 object Main extends App {
-  type Logged[A] = Writer[Vector[String], A]
+  val catName: Reader[Cat, String] =
+    Reader(cat => cat.name)
+  val greetKitty: Reader[Cat, String] =
+    catName.map(name => s"Hello $name")
 
-  def slowly[A](body: => A): A =
-    try body finally Thread.sleep(100)
+  val feedKitty: Reader[Cat, String] =
+    Reader(cat => s"Have a nice bowl of ${cat.name}")
 
-  def factorial(n: Int): Logged[Int] =
+  val greetAndFeed: Reader[Cat, String] =
     for {
-      slowed <-
-        if (n==0) 1.pure[Logged]
-        else slowly(factorial(n - 1).map(_ * n))
-      _ <- Vector(s"fact ${n} $slowed").tell
-    } yield slowed
+      greet <- greetKitty
+      feed <- feedKitty
+    } yield s"$greet. $feed"
 
-  val result = Await.result(Future.sequence(Vector(
-    Future(factorial(3).run),
-    Future(factorial(3).run)
-  )), 5.seconds)
+  println(greetAndFeed(Cat("Ken", 35, "blue")))
+  println(greetAndFeed(Cat("Maya", 35, "red")))
 
-  println(result)
+  /*
+   * DbReader
+   */
+  case class Db(usernames: Map[Int, String], passwords: Map[String, String])
+  type DbReader[A] = Reader[Db, A]
+
+  def findUsername(userId: Int): DbReader[Option[String]] =
+    Reader(db => db.usernames.get(userId))
+
+  def checkPassword(username: String, password: String): DbReader[Boolean] =
+    Reader(db => db.passwords.get(username).contains(password))
+
+  def checkLogin(userId: Int, password: String): DbReader[Boolean] =
+    for {
+      username <- findUsername(userId)
+      result <- username.map { un =>
+                  checkPassword(un, password)
+                }.getOrElse {
+                  false.pure[DbReader]
+                }
+    } yield result
+
+  val users = Map(
+    1 -> "dade",
+    2 -> "kate",
+    3 -> "margo"
+  )
+
+  val passwords = Map(
+    "dade" -> "zerocool",
+    "kate" -> "acidburn",
+    "margo" -> "secret"
+  )
+  val db = Db(users, passwords)
+  println("===== Check Login by using checkLogin =====")
+  println(checkLogin(1, "zerocool").run(db))
+  println(checkLogin(3, "secret").run(db))
 }
