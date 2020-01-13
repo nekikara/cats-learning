@@ -2,6 +2,9 @@ package sandbox
 
 import cats.data.State
 import cats.syntax.applicative._
+import cats.syntax.functor._
+import cats.syntax.flatMap._
+import BTree._
 
 object Main extends App {
   val step1 = State[Int, String] { state =>
@@ -84,4 +87,12 @@ object Main extends App {
   println(s"program4 => ${program4.runA(Nil).value}")
   val program5 = evalInput("1 2 + 3 *")
   println(s"program5 => ${program5.runA(Nil).value}")
+
+
+  val newTree = for {
+    a  <- branch(leaf(100), leaf(200))
+    b <- branch(leaf(a - 10), leaf(a + 10))
+    c <- branch(leaf(b - 1), leaf(b + 1))
+  } yield c
+  println(newTree)
 }
