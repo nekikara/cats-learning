@@ -1,98 +1,45 @@
 package sandbox
 
-import cats.data.State
-import cats.syntax.applicative._
-import cats.syntax.functor._
-import cats.syntax.flatMap._
-import BTree._
+import cats.data.EitherT
+import cats.instances.future._
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.{Await, Future}
+import scala.concurrent.duration._
 
 object Main extends App {
-  val step1 = State[Int, String] { state =>
-    val ans = state + 1
-    (ans, s"$state + 1 = Result of step1: $ans\n")
-  }
+  type Response[A] = EitherT[Future, String, A]
 
-  val step2 = State[Int, String] { num =>
-    val ans = num * 2
-    (ans, s"$num * 2 = Result of step2: $ans\n")
-  }
-
-  val both = for {
-    a <- step1
-    b <- step2
-  } yield (a, b)
-
-  val (state, result) = both.run(100).value
-//  println(state)
-//  println(result)
-
-  type CalcState[A] = State[List[Int], A]
-  def evalOne(sym: String): CalcState[Int] =
-    sym match {
-      case "+" => operator(_ + _)
-      case "-" => operator(_ - _)
-      case "/" => operator(_ / _)
-      case "*" => operator(_ * _)
-      case num => operand(num.toInt)
+  val powerLevels = Map(
+    "Jazz" -> 6,
+    "Bumblebee" -> 8,
+    "Hot Rod" -> 10
+  )
+  def getPowerLevel(autobot: String): Response[Int] =
+    powerLevels.get(autobot) match {
+      case Some(p) => EitherT.right(Future(p))
+      case None => EitherT.left(Future(s"$autobot unreachable"))
     }
 
-  def operand(i: Int): CalcState[Int] = State[List[Int], Int] { state =>
-    (i :: state, i)
+  def canSpecialMove(ally1: String, ally2: String): Response[Boolean] =
+    for {
+      a <- getPowerLevel(ally1)
+      b <- getPowerLevel(ally2)
+    } yield 15 < (a + b)
+
+  def tacticalReport(ally1: String, ally2: String): String = {
+    val result = canSpecialMove(ally1, ally2).value
+    Await.result(result, 1.second) match {
+      case Right(false) => s"$ally1 and $ally2 need a recharge"
+      case Right(true) => s"$ally1 and $ally2 are ready to roll out!"
+      case Left(msg) => s"Comms error: $msg"
+    }
   }
 
-  def operator(function: (Int, Int) => Int): CalcState[Int] =
-    State[List[Int], Int] {
-      case b :: a :: tail =>
-        val ans = function(a, b)
-        (ans :: tail, ans)
-      case _ =>
-        sys.error("Fail!")
-    }
-
-  def evalAll(input: List[String]): CalcState[Int] =
-    input.foldLeft(0.pure[CalcState]) { (acc, b) =>
-      acc.flatMap(_ => evalOne(b))
-    }
-//    (input: @unchecked) match {
-//      case h :: tail => for {
-//                          b <- evalOne(h)
-//                          ans <- if (tail != Nil) evalAll(tail) else State.pure[List[Int], Int](b)
-//                        } yield ans
-//    }
-
-  val first = evalOne("42").runA(Nil).value
-  println(first)
-
-  val program = for {
-    _ <- evalOne("1")
-    _ <- evalOne("2")
-    ans <- evalOne("+")
-  } yield ans
-  println(program.runA(Nil).value)
-
-  val program2 = evalAll(List("1", "2", "+", "3", "*"))
-  println(s"program2 => ${program2.runA(Nil).value}")
-
-  val program3 = for {
-    _ <- evalAll(List("1", "2", "+"))
-    _ <- evalAll(List("3", "4", "+"))
-    ans <- evalOne("*")
-  } yield ans
-  println(s"program3 => ${program3.runA(Nil).value}")
-
-  def evalInput(input: String): CalcState[Int] =
-    evalAll(input.split(" ").toList)
-
-  val program4 = evalInput("1 2 + 3 4 + *")
-  println(s"program4 => ${program4.runA(Nil).value}")
-  val program5 = evalInput("1 2 + 3 *")
-  println(s"program5 => ${program5.runA(Nil).value}")
-
-
-  val newTree = for {
-    a  <- branch(leaf(100), leaf(200))
-    b <- branch(leaf(a - 10), leaf(a + 10))
-    c <- branch(leaf(b - 1), leaf(b + 1))
-  } yield c
-  println(newTree)
+  println(Await.result(getPowerLevel("Jazz").value, 1.second))
+  println(Await.result(getPowerLevel("hogheoge").value, 1.second))
+  println(Await.result(canSpecialMove("Jazz", "Hot Rod").value, 1.second))
+  println(Await.result(canSpecialMove("Jazz", "Bumblebee").value, 1.second))
+  println(tacticalReport("Jazz", "Bumblebee"))
+  println(tacticalReport("Bumblebee", "Hot Rod"))
+  println(tacticalReport("Jazz", "Ironhide"))
 }
