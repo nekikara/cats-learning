@@ -1,45 +1,77 @@
 package sandbox
 
-import cats.data.EitherT
-import cats.instances.future._
-import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.{Await, Future}
-import scala.concurrent.duration._
 
 object Main extends App {
-  type Response[A] = EitherT[Future, String, A]
+  import cats.data.Validated
+  import cats.instances.list._
+  import cats.syntax.either._
+  import cats.syntax.apply._
 
-  val powerLevels = Map(
-    "Jazz" -> 6,
-    "Bumblebee" -> 8,
-    "Hot Rod" -> 10
-  )
-  def getPowerLevel(autobot: String): Response[Int] =
-    powerLevels.get(autobot) match {
-      case Some(p) => EitherT.right(Future(p))
-      case None => EitherT.left(Future(s"$autobot unreachable"))
+  type FormData = Map[String, String]
+  type FailFast[A] = Either[List[String], A]
+  type FailSlow[A] = Validated[List[String], A]
+
+  def getValue(name: String)(data: FormData): FailFast[String] =
+    data.get(name).toRight(List(s"$name field not specified"))
+
+  def parseInt(str: String): FailFast[Int] =
+    util.Try(str.toInt).toEither match {
+      case Right(x) => Right(x)
+      case Left(_) => Left(List(s"$str can't be parsed"))
+    }
+  def nonBlank(value: String): FailFast[Boolean] =
+    if (value.nonEmpty) Right(true) else Left(List(s"$value is blank!"))
+  def nonNegative(value: Int): FailFast[Boolean] =
+    if (value > 0) {
+      Right(true)
+    } else {
+      Left(List(s"$value is negative"))
     }
 
-  def canSpecialMove(ally1: String, ally2: String): Response[Boolean] =
+  def readName(data: FormData): FailFast[String] =
     for {
-      a <- getPowerLevel(ally1)
-      b <- getPowerLevel(ally2)
-    } yield 15 < (a + b)
+      name <- getValue("name")(data)
+      _ <- nonBlank(name)
+    } yield name
 
-  def tacticalReport(ally1: String, ally2: String): String = {
-    val result = canSpecialMove(ally1, ally2).value
-    Await.result(result, 1.second) match {
-      case Right(false) => s"$ally1 and $ally2 need a recharge"
-      case Right(true) => s"$ally1 and $ally2 are ready to roll out!"
-      case Left(msg) => s"Comms error: $msg"
-    }
-  }
+  def readAge(data: FormData): FailFast[Int] =
+    for {
+      age <- getValue("age")(data)
+      n <- parseInt(age)
+      _ <- nonNegative(n)
+    } yield n
 
-  println(Await.result(getPowerLevel("Jazz").value, 1.second))
-  println(Await.result(getPowerLevel("hogheoge").value, 1.second))
-  println(Await.result(canSpecialMove("Jazz", "Hot Rod").value, 1.second))
-  println(Await.result(canSpecialMove("Jazz", "Bumblebee").value, 1.second))
-  println(tacticalReport("Jazz", "Bumblebee"))
-  println(tacticalReport("Bumblebee", "Hot Rod"))
-  println(tacticalReport("Jazz", "Ironhide"))
+  case class User(name: String, age: Int)
+
+  def validatedUser(data: FormData): FailSlow[User] =
+    (
+      readName(data).toValidated,
+      readAge(data).toValidated
+    ).mapN(User.apply)
+
+  val validData = Map(
+    "name" -> "hogeohge",
+    "age" -> "32"
+  )
+  println(validatedUser(validData))
+  val blankName = Map(
+    "name" -> "",
+    "age" -> "32"
+  )
+  println(validatedUser(blankName))
+  val negativeAge = Map(
+    "name" -> "",
+    "age" -> "-32"
+  )
+  println(validatedUser(negativeAge))
+  val noNameKey = Map(
+    "nam" -> "",
+    "age" -> "-32"
+  )
+  println(validatedUser(noNameKey))
+  val noNumericAge = Map(
+    "name" -> "sxxx",
+    "age" -> "asdie"
+  )
+  println(validatedUser(noNameKey))
 }
