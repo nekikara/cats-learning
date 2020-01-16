@@ -1,21 +1,31 @@
 package sandbox
 
-import Uptime._
-import cats.Id
+import cats.kernel.Monoid
+import cats.syntax.semigroup._
+import cats.instances.future._
+import cats.instances.int._
+
+import scala.concurrent.{Await, Future}
+import scala.concurrent.duration._
+import scala.concurrent.ExecutionContext.Implicits.global
+
 
 object Main extends App {
-  class TestUptimeClient(hosts: Map[String, Int]) extends UptimeClient[Id] {
-    override def getUptime(hostname: String): Id[Int] = hosts.getOrElse(hostname, 0)
+  def foldMap[A, B: Monoid](vec: Vector[A])(fn: A => B): B =
+    vec.foldLeft(Monoid.empty[B])(_ |+| fn(_))
+
+  def parallelFoldMap[A, B: Monoid](vals: Vector[A])(fn: A => B): Future[B] = {
+    val cpus = Runtime.getRuntime.availableProcessors()
+    val groupSize = (1.0 * vals.size / cpus).ceil.toInt
+    val batches = vals.grouped(groupSize).toList
+    val futures = batches.map(batch => Future {
+      foldMap(batch)(fn)
+    })
+    Monoid[Future[B]].combineAll(futures)
   }
 
-  def testTotalUptime() = {
-    val hosts = Map("host1" -> 10, "host2" -> 6)
-    val client = new TestUptimeClient(hosts)
-    val service = new UptimeService(client)
-    val actual = service.getTotalUptime(hosts.keys.toList)
-    val expected = hosts.values.sum
-    assert(actual == expected)
-  }
+  val f1 = parallelFoldMap((1 to 10000).toVector)(identity)
+  val ranF1 = Await.result(f1, 1.second)
+  println(ranF1)
 
-  testTotalUptime()
 }
