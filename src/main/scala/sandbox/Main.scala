@@ -1,31 +1,36 @@
 package sandbox
 
-import cats.kernel.Monoid
+import cats.Semigroup
+import cats.data.Validated
+import cats.data.Validated._
+import cats.instances.list._
+import cats.syntax.apply._
 import cats.syntax.semigroup._
-import cats.instances.future._
-import cats.instances.int._
 
-import scala.concurrent.{Await, Future}
-import scala.concurrent.duration._
-import scala.concurrent.ExecutionContext.Implicits.global
+sealed trait Predicate[E, A] {
+  def apply(value: A)(implicit s: Semigroup[E]): Validated[E, A] =
+    this match {
+      case Pure(func) => func(value)
+      case And(left, right) =>
+        (left(value), right(value)).mapN((_, _) => value)
+      case Or(left, right) =>
+        left(value) match {
+          case Valid(value) => Valid(value)
+          case Invalid(e1) =>
+            right(value) match {
+              case Valid(value) => Valid(value)
+              case Invalid(e2) => Invalid(e1 |+| e2)
+            }
+        }
+    }
 
-
-object Main extends App {
-  def foldMap[A, B: Monoid](vec: Vector[A])(fn: A => B): B =
-    vec.foldLeft(Monoid.empty[B])(_ |+| fn(_))
-
-  def parallelFoldMap[A, B: Monoid](vals: Vector[A])(fn: A => B): Future[B] = {
-    val cpus = Runtime.getRuntime.availableProcessors()
-    val groupSize = (1.0 * vals.size / cpus).ceil.toInt
-    val batches = vals.grouped(groupSize).toList
-    val futures = batches.map(batch => Future {
-      foldMap(batch)(fn)
-    })
-    Monoid[Future[B]].combineAll(futures)
-  }
-
-  val f1 = parallelFoldMap((1 to 10000).toVector)(identity)
-  val ranF1 = Await.result(f1, 1.second)
-  println(ranF1)
-
+  def and(that: Predicate[E, A]): Predicate[E, A] = And(this, that)
+  def or(that: Predicate[E, A]): Predicate[E, A] = Or(this, that)
 }
+final case class And[E, A](left: Predicate[E, A], right: Predicate[E, A]) extends Predicate[E, A]
+final case class Or[E, A](left: Predicate[E, A], right: Predicate[E, A]) extends Predicate[E, A]
+final case class Pure[E, A](func: A => Validated[E, A]) extends Predicate[E, A]
+
+
+
+object Main extends App { }
