@@ -1,36 +1,17 @@
 package sandbox
 
-import cats.Semigroup
-import cats.data.Validated
-import cats.data.Validated._
-import cats.instances.list._
-import cats.syntax.apply._
-import cats.syntax.semigroup._
+import GCounter._
+import cats.instances.int._
 
-sealed trait Predicate[E, A] {
-  def apply(value: A)(implicit s: Semigroup[E]): Validated[E, A] =
-    this match {
-      case Pure(func) => func(value)
-      case And(left, right) =>
-        (left(value), right(value)).mapN((_, _) => value)
-      case Or(left, right) =>
-        left(value) match {
-          case Valid(value) => Valid(value)
-          case Invalid(e1) =>
-            right(value) match {
-              case Valid(value) => Valid(value)
-              case Invalid(e2) => Invalid(e1 |+| e2)
-            }
-        }
-    }
+object Main extends App {
+  val g1 = Map("a" -> 7, "b" -> 3)
+  val g2 = Map("a" -> 2, "b" -> 5)
 
-  def and(that: Predicate[E, A]): Predicate[E, A] = And(this, that)
-  def or(that: Predicate[E, A]): Predicate[E, A] = Or(this, that)
+  val counter = GCounter[Map, String, Int]
+  val incremented = counter.increment(g1)("a", 100)
+  println(incremented)
+  val merged = counter.merge(g1, g2)
+  println(merged)
+  val total = counter.total(merged)
+  println(total)
 }
-final case class And[E, A](left: Predicate[E, A], right: Predicate[E, A]) extends Predicate[E, A]
-final case class Or[E, A](left: Predicate[E, A], right: Predicate[E, A]) extends Predicate[E, A]
-final case class Pure[E, A](func: A => Validated[E, A]) extends Predicate[E, A]
-
-
-
-object Main extends App { }
